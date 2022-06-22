@@ -6,6 +6,7 @@ class A:
 
     @classmethod
     def class_method(cls, param):
+
         print('var1 before class method -- ', cls.var1)
         cls.var1 = param  # only class variables can be accessed
         print('var1 after class method -- ', cls.var1)
