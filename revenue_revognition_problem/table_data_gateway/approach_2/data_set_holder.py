@@ -78,7 +78,6 @@ class DataGateway:
     def delete(self, key: str):
         self.table.delete(ds)
 
-
     def __getitem__(self, key: str) -> DataRow:
         return self.collection.find_one({'_id': ObjectId(key)})
 
