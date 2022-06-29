@@ -1,16 +1,39 @@
-from pymongo.cursor import Cursor
+from pymongo.cursor import (Cursor)
+from typing import Dict
 from bson import (ObjectId)
 from mongodb import (DatabaseClient, MONGO_DATABASE)
+
+
+class Registry:
+    __instances: {}
+    collection = 'people'
+    persons: Dict[PersonGateway]
+
+    def __new__(cls, *args, **kwargs):
+        """ For implementing Singleton object data pattern """
+        if cls not in cls.__instances:
+            cls.__instances[cls] = super(Registry, cls).__new__(cls, *args, **kwargs)
+        return cls.__instances[cls]
+
+    def add_person(self, person: PersonGateway):
+        self.persons.update({str(person.oid): person})
+
+    def get_person(self, _id: str):
+        return self.persons.get(_id)
 
 
 class PersonGateway:
     last_name: str
     first_name: str
     number_of_dependents: int
-    collection = 'people'
+    oid: ObjectId
 
-    def __init__(self):
-        self.db = DatabaseClient()[MONGO_DATABASE][self.collection]
+    def __init__(self, _id=None, last_name=None, first_name=None, number_of_dependents=None):
+        self.oid = _id
+        self.last_name = last_name
+        self.first_name = first_name
+        self.number_of_dependents = number_of_dependents
+        self.db = DatabaseClient()[MONGO_DATABASE][Registry.collection]
 
     def set_last_name(self, last_name: str):
         self.last_name = last_name
@@ -59,26 +82,46 @@ class PersonGateway:
         return result
 
     def load(self, rs: Cursor):
-        data = list(rs)
-        if not data:
-            raise Exception('No data g')
+        data = list(rs)[0]
+        _id: ObjectId = data['_id']
+        first_name = data['first_name']
+        last_name = data['last_name']
+        number_of_dependents = data['number_of_dependents']
+
+        result = PersonGateway(_id, last_name, first_name, number_of_dependents)
+        Registry().add_person(result)
+        return result
 
 
 class PersonFinder:
     def __init__(self):
-        self.db = DatabaseClient()[MONGO_DATABASE][PersonGateway.collection]
+        self.db = DatabaseClient()[MONGO_DATABASE][Registry.collection]
 
     def find_query(self, _id: str):
         return {'_id': ObjectId(_id)}
 
     def find(self, _id: str):
-        result: PersonGateway = Registry.get_person(_id)
+        result: PersonGateway = Registry().get_person(_id=_id)
         if result is not None:
             return result
 
         query = self.find_query(_id)
         rs = self.db.find(query)
-        result = PersonGateway.load(rs)
+        if rs.count() == 0:
+            raise Exception('No person found with given id')
+        result = PersonGateway().load(rs)
 
+        return result
 
+    def find_responsible_query(self):
+        return {'number_of_dependents': {'$gt': 0}}, \
+               {'first_name': 1, 'last_name': 1, 'number_of_dependents': 1}
 
+    def find_responsibles(self):
+        query_params = self.find_responsible_query()
+        rs = self.db.find(*query_params)
+        if rs.count() == 0:
+            raise Exception('No person found with number_of_dependents more than 0')
+        result = PersonGateway().load(rs)
+
+        return result
