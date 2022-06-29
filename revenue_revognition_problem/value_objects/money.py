@@ -24,3 +24,8 @@ class Money:
             return self.amount + other.amount
         else:
             raise Exception('Expecting Money type instance for addition or money')
+
+    def multiple(self, other):
+        if isinstance(other, Money):
+            return self.amount * other.amount
+        raise Exception('Expecting Money type instance for multiple or money')
