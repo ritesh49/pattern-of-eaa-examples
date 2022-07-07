@@ -15,6 +15,7 @@ class Money:
         cls.amount = amount
         return cls(amount)
 
+
     @classmethod
     def allocate(cls, no: int):
         return [Money.dollars(i) for i in [cls.amount/no] * no]
