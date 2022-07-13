@@ -18,6 +18,15 @@ class Person:
         self.first_name = first_name
         self.number_of_dependents = number_of_dependents
 
+    @property
+    def data(self):
+        return {
+            '_id': self.oid,
+            'first_name': self.first_name,
+            'last_name': self.last_name,
+            'number_of_dependents': self.number_of_dependents
+        }
+
 
 """
 Db collection schema
@@ -58,6 +67,10 @@ class AbstractMapper(ABC):
     def _prepare_find_by_last_name_query(self, last_name) -> dict:
         pass
 
+    @abstractmethod
+    def prepare_update_query(self, _id: str, subject: Person) -> tuple:
+        pass
+
     def do_load(self, _id: str, rs: ResultSet):
         last_name: str = rs['last_name']
         first_name: str = rs['first_name']
@@ -86,6 +99,9 @@ class AbstractMapper(ABC):
         rs: ResultSet = self.db.find(find_query, self._projection)
         result = self.load(rs)
         return result
+
+    def _insert(self, subject: DomainSubject):
+        pass
 
 
 class PersonMapper(AbstractMapper):
@@ -120,11 +136,22 @@ class PersonMapper(AbstractMapper):
         """
         return self.find_many(self.FindByLastName(pattern))
 
-    def prepare_update_query(self, _id: str, subject: Person):
+    def _prepare_update_query(self, _id: str, subject: Person) -> tuple:
         return {'_id': ObjectId(_id)}, {'$set': {**subject}}
 
-    def update(self, subject: Person):
-        update_query =
+    def update(self, _id: str, subject: Person):
+        update_query = self._prepare_update_query(_id, subject)
+        self.db.update(*update_query)
+
+    def _insert(self, abs_subject: DomainSubject):
+        # https://medium.com/swlh/dont-use-database-generated-ids-d703d35e9cc4
+        # blog for sharing why oid is generated here
+        subject: Person = abs_subject
+        subject.oid = ObjectId()
+        subject.first_name = subject.first_name
+        subject.last_name = subject.last_name
+        subject.number_of_dependents = subject.number_of_dependents
+        self.db.insert(subject.data)
 
     class FindByLastName(StatementSource):
         last_name: str
