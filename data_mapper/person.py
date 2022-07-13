@@ -1,4 +1,5 @@
 from bson import ObjectId
+from typing import List
 from abc import ABC, abstractmethod
 from mongodb import DatabaseClient as DB, MONGO_DATABASE
 
@@ -9,6 +10,13 @@ class Person:
     last_name: str
     first_name: str
     number_of_dependents: int
+    oid: ObjectId
+
+    def __init__(self, _id=None, last_name=None, first_name=None, number_of_dependents=None):
+        self.oid = _id
+        self.last_name = last_name
+        self.first_name = first_name
+        self.number_of_dependents = number_of_dependents
 
 
 """
@@ -19,6 +27,20 @@ Db collection schema
     "number_of_dependents": 10
 }
 """
+
+
+class StatementSource(ABC):
+    query: dict
+
+    @abstractmethod
+    @property
+    def prepare_query(self):
+        pass
+
+    @abstractmethod
+    @property
+    def parameters(self):
+        pass
 
 
 class AbstractMapper(ABC):
@@ -33,8 +55,14 @@ class AbstractMapper(ABC):
         pass
 
     @abstractmethod
-    def do_load(self, _id: str, rs: ResultSet):
+    def _prepare_find_by_last_name_query(self, last_name) -> dict:
         pass
+
+    def do_load(self, _id: str, rs: ResultSet):
+        last_name: str = rs['last_name']
+        first_name: str = rs['first_name']
+        num_dependents: int = rs['number_of_dependents']
+        return Person(_id, last_name, first_name, num_dependents)
 
     def load(self, rs: ResultSet):
         _id = rs['_id']
@@ -42,6 +70,12 @@ class AbstractMapper(ABC):
             return self.loaded_map.get(_id)
         result: DomainObject = self.do_load(_id, rs)
         self.loaded_map.update({_id: result})
+        return result
+
+    def load_all(self, rs: ResultSet):
+        result: List[Person] = list()
+        for result_set in rs:
+            result.append(self.load(result_set))
         return result
 
     def _abstract_find(self, _id: str):
@@ -54,14 +88,55 @@ class AbstractMapper(ABC):
         return result
 
 
-class PersonMapper:
+class PersonMapper(AbstractMapper):
     projection = {'_id': 1, 'first_name': 1, 'last_name': 1,'number_of_dependents': 1}
 
-    def prepare_find_query(self, _id: str) -> dict:
+    def _prepare_find_query(self, _id: str) -> dict:
         return {'_id': ObjectId(_id)}
 
     def find(self, _id: str) -> Person:
-        return self.abstract_find(_id)
+        return self._abstract_find(_id)
 
+    def _prepare_find_by_last_name_query(self, last_name):
+        return {'last_name': last_name}
+
+    def find_by_last_name(self, last_name: str):
+        find_query = self._prepare_find_by_last_name_query(last_name)
+        rs: ResultSet = self.db.find(find_query, self.projection)
+        return self.load_all(rs)
+
+    def find_many(self, source: StatementSource):
+        """
+            generalized find method for all cases
+        """
+        find_query = source.prepare_query  # prepare query will prepare using source.parameters which'l have person dtls
+        rs: ResultSet = self.db.find(find_query, self.projection)
+        return self.load_all(rs)
+
+    def find_by_last_name_v2(self, pattern: str):
+        """
+            Version 2 of find_by_last_name
+            using inner class FindByLastName for wrapping mongo queries
+        """
+        return self.find_many(self.FindByLastName(pattern))
+
+    def prepare_update_query(self, _id: str, subject: Person):
+        return {'_id': ObjectId(_id)}, {'$set': {**subject}}
+
+    def update(self, subject: Person):
+        update_query =
+
+    class FindByLastName(StatementSource):
+        last_name: str
+
+        def __init__(self, last_name: str):
+            self.last_name = last_name
+
+        def prepare_query(self):
+            params = self.parameters()
+            return {'last_name': params[0]}
+
+        def parameters(self):
+            return [self.last_name]
 
 
