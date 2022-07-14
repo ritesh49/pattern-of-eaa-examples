@@ -4,7 +4,17 @@ from abc import ABC, abstractmethod
 from mongodb import DatabaseClient as DB, MONGO_DATABASE
 
 
-class Person:
+class DomainObject(ABC):
+    oid: ObjectId
+    collection: str
+
+    @abstractmethod
+    @property
+    def data(self) -> dict:
+        pass
+
+
+class Person(DomainObject):
     collection = 'person'
 
     last_name: str
@@ -31,6 +41,7 @@ class Person:
 """
 Db collection schema
 {
+    "_id": ObjectId('random_id')
     "first_name": "Ritesh",
     "last_name": "Ramchandani",
     "number_of_dependents": 10
@@ -57,7 +68,7 @@ class AbstractMapper(ABC):
     loaded_map = dict()
 
     def __init__(self):
-        self.db = DB()[MONGO_DATABASE][Person.collection]
+        self.db = DB()[MONGO_DATABASE][DomainObject.collection]
 
     @abstractmethod
     def _prepare_find_query(self, _id: str) -> dict:
@@ -68,20 +79,14 @@ class AbstractMapper(ABC):
         pass
 
     @abstractmethod
-    def prepare_update_query(self, _id: str, subject: Person) -> tuple:
+    def prepare_update_query(self, _id: str, subject: DomainObject) -> tuple:
         pass
-
-    def do_load(self, _id: str, rs: ResultSet):
-        last_name: str = rs['last_name']
-        first_name: str = rs['first_name']
-        num_dependents: int = rs['number_of_dependents']
-        return Person(_id, last_name, first_name, num_dependents)
 
     def load(self, rs: ResultSet):
         _id = rs['_id']
         if self.loaded_map.__contains__(_id):
             return self.loaded_map.get(_id)
-        result: DomainObject = self.do_load(_id, rs)
+        result: DomainObject = self._do_load(_id, rs)
         self.loaded_map.update({_id: result})
         return result
 
@@ -100,7 +105,12 @@ class AbstractMapper(ABC):
         result = self.load(rs)
         return result
 
+    @abstractmethod
     def _insert(self, subject: DomainSubject):
+        pass
+
+    @abstractmethod
+    def _do_load(self, _id: str, rs: ResultSet):
         pass
 
 
@@ -128,6 +138,12 @@ class PersonMapper(AbstractMapper):
         find_query = source.prepare_query  # prepare query will prepare using source.parameters which'l have person dtls
         rs: ResultSet = self.db.find(find_query, self.projection)
         return self.load_all(rs)
+
+    def _do_load(self, _id: str, rs: ResultSet):
+        last_name: str = rs['last_name']
+        first_name: str = rs['first_name']
+        num_dependents: int = rs['number_of_dependents']
+        return Person(_id, last_name, first_name, num_dependents)
 
     def find_by_last_name_v2(self, pattern: str):
         """
